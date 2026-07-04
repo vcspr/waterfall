@@ -1,0 +1,13 @@
+{
+  "name": "waterfall",
+  "version": "0.1.0",
+  "description": "A specimen machine. Point it at a font file, get a designed type specimen.",
+  "type": "module",
+  "scripts": { "demo": "node waterfall.mjs examples/PlayfairDisplay-Variable.ttf && node waterfall.mjs examples/GeistMono-Variable.ttf" },
+  "keywords": ["typography", "fonts", "type-specimen", "variable-fonts", "pdf", "playwright"],
+  "author": "Victor Uwakwe (https://github.com/vcspr)",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/vcspr/waterfall.git" },
+  "engines": { "node": ">=18" },
+  "dependencies": { "fontkit": "^2.0.4", "playwright": "^1.49.0" }
+}
