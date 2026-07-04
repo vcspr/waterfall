@@ -55,5 +55,14 @@ The example fonts are [Geist Mono](examples/OFL-GeistMono.txt) and
 [Playfair Display](examples/OFL-PlayfairDisplay.txt), each under the SIL Open
 Font License. waterfall itself is [MIT](LICENSE) © 2026 Victor Uwakwe.
 
-On the bench: WOFF2 web preview mode, multi-font family books, a
-`--compare` spread that sets two fonts against each other.
+## The Duel
+
+Two fonts, one spread, same words at the same sizes:
+
+```bash
+node waterfall.mjs SerifA.otf SansB.ttf --compare
+```
+
+![Playfair Display against Geist Mono](media/compare.png)
+
+On the bench: WOFF2 web preview mode and multi-font family books.

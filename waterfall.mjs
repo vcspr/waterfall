@@ -4,6 +4,7 @@
  *
  *   node waterfall.mjs MyFont.ttf
  *   node waterfall.mjs MyFont.ttf --out specimens --no-pdf
+ *   node waterfall.mjs SerifA.otf SansB.ttf --compare   # two fonts, one spread
  *
  * Reads the font's own metadata (fontkit) and sets a specimen in the font
  * itself: cover, size waterfall, character set, variable-axis ramps, and a
@@ -19,11 +20,84 @@ const fontkit = fontkitNS.default ?? fontkitNS;
 const argv = process.argv.slice(2);
 const opt = (n, d) => { const i = argv.indexOf(n); return i >= 0 && argv[i + 1] ? argv[i + 1] : d; };
 const flag = (n) => argv.includes(n);
-const fontPath = argv.find((a) => /\.(ttf|otf|ttc|woff2?)$/i.test(a));
-if (!fontPath) { console.error("Usage: node waterfall.mjs <font file> [--out out] [--no-pdf]"); process.exit(1); }
+const fontPaths = argv.filter((a) => /\.(ttf|otf|ttc|woff2?)$/i.test(a));
+const fontPath = fontPaths[0];
+if (!fontPath) { console.error("Usage: node waterfall.mjs <font file> [font2 --compare] [--out out] [--no-pdf]"); process.exit(1); }
 
 const OUT = resolve(opt("--out", "out"));
 const abs = resolve(fontPath);
+
+
+// ---------------------------------------------------------------- compare mode
+if (flag("--compare") && fontPaths.length >= 2) {
+  const introspect = (p) => {
+    let f = fontkit.openSync(resolve(p));
+    if (f.fonts) f = f.fonts[0];
+    const pan = f["OS/2"]?.panose;
+    const isMono = !!f.post?.isFixedPitch;
+    return {
+      abs: resolve(p), family: f.familyName || basename(p), style: f.subfamilyName || "",
+      glyphs: f.numGlyphs, axes: Object.entries(f.variationAxes || {}),
+      feats: [...new Set(f.availableFeatures || [])].length,
+      kind: isMono ? "monospace" : (pan && pan[0] === 2 ? (pan[1] >= 2 && pan[1] <= 10 ? "serif" : "sans serif") : "typeface"),
+    };
+  };
+  const [A, B] = [introspect(fontPaths[0]), introspect(fontPaths[1])];
+  const escC = (x) => String(x).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const GRAM = "Sphinx of black quartz, judge my vow.";
+  const col = (F, cls) => `
+    <div class="side">
+      <div class="side-name ${cls}">${escC(F.family)}</div>
+      <div class="side-meta">${escC(F.style)} · ${escC(F.kind)} · ${F.glyphs.toLocaleString()} glyphs · ${F.axes.length} axes · ${F.feats} features</div>
+      ${[64, 36, 21, 13].map((z) => `<div class="cmp-row ${cls}" style="font-size:${z}pt">${escC(GRAM)}</div>`).join("")}
+      <div class="cmp-chars ${cls}">AaBbGgQqRr 0123469 fi ffl → &amp;?!</div>
+      <p class="cmp-body ${cls}">The difference between two typefaces is rarely visible in a name. Set the same words at the same sizes and the argument settles itself.</p>
+    </div>`;
+  const htmlC = `<!doctype html><html><head><meta charset="utf-8"><title>${escC(A.family)} vs ${escC(B.family)}</title>
+<style>
+@font-face { font-family: "FA"; src: url("file://${encodeURI(A.abs)}"); }
+@font-face { font-family: "FB"; src: url("file://${encodeURI(B.abs)}"); }
+@page { size: Letter landscape; margin: 0; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { background: #26262a; font-family: "Helvetica Neue", Arial, sans-serif; color: #101013; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.page { background: #fcfcfa; width: 11in; height: 8.5in; padding: 0.5in 0.6in; margin: 0 auto; display: flex; flex-direction: column; overflow: hidden; }
+@media screen { .page { margin: 12px auto; box-shadow: 0 1px 4px rgba(0,0,0,.4); } }
+.bar { display: flex; justify-content: space-between; font-size: 8pt; letter-spacing: .14em; text-transform: uppercase; padding: 6px 0; border-top: 1.5px solid #101013; }
+.bar.top { border-bottom: 1px solid #b9b9b2; margin-bottom: 18px; }
+.bar.bot { margin-top: auto; }
+.duel { flex: 1; display: grid; grid-template-columns: 1fr 1px 1fr; gap: 0 28px; }
+.divider { background: #101013; }
+.fa { font-family: "FA", serif; }
+.fb { font-family: "FB", serif; }
+.side-name { font-size: 30pt; line-height: 1.05; }
+.side-meta { font-size: 8pt; color: #8a8a84; letter-spacing: .06em; margin: 6px 0 14px; }
+.cmp-row { white-space: nowrap; overflow: hidden; border-bottom: 1px solid #e4e4dd; padding: 8px 0; }
+.cmp-chars { font-size: 22pt; padding: 12px 0; border-bottom: 1px solid #e4e4dd; }
+.cmp-body { font-size: 11pt; line-height: 1.55; margin-top: 14px; }
+</style></head><body>
+<section class="page">
+  <div class="bar top"><span>WATERFALL — COMPARISON SPREAD</span><span>${escC(A.family).toUpperCase()} / ${escC(B.family).toUpperCase()}</span></div>
+  <div class="duel">${col(A, "fa")}<div class="divider"></div>${col(B, "fb")}</div>
+  <div class="bar bot"><span>SAME WORDS · SAME SIZES</span><span>SET BY WATERFALL</span></div>
+</section>
+</body></html>`;
+  mkdirSync(OUT, { recursive: true });
+  const slugC = `${A.family}-vs-${B.family}`.toLowerCase().replace(/[^\w-]+/g, "-");
+  const outC = join(OUT, `${slugC}.html`);
+  writeFileSync(outC, htmlC);
+  console.log(`✓ ${outC}`);
+  if (!flag("--no-pdf")) {
+    const { chromium } = await import("playwright");
+    const b = await chromium.launch();
+    try {
+      const p = await b.newPage();
+      await p.goto(`file://${outC}`, { waitUntil: "networkidle" });
+      await p.pdf({ path: join(OUT, `${slugC}.pdf`), landscape: true, format: "Letter", printBackground: true, preferCSSPageSize: true });
+      console.log(`✓ ${join(OUT, `${slugC}.pdf`)}`);
+    } finally { await b.close(); }
+  }
+  process.exit(0);
+}
 
 let font = fontkit.openSync(abs);
 if (font.fonts) font = font.fonts[0]; // .ttc collections: take the first face
