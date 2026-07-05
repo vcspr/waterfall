@@ -19,6 +19,7 @@ git clone https://github.com/vcspr/waterfall && cd waterfall
 npm install && npx playwright install chromium
 
 node waterfall.mjs examples/PlayfairDisplay-Variable.ttf
+node waterfall.mjs examples/PlayfairDisplay-Variable.ttf --poster   # one-page type poster
 open out/playfair-display.pdf
 ```
 

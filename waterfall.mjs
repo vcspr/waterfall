@@ -99,6 +99,67 @@ html, body { background: #26262a; font-family: "Helvetica Neue", Arial, sans-ser
   process.exit(0);
 }
 
+// ---------------------------------------------------------------- poster mode
+if (flag("--poster")) {
+  let pf = fontkit.openSync(abs);
+  if (pf.fonts) pf = pf.fonts[0];
+  const pfam = pf.familyName || basename(abs);
+  const pstyle = pf.subfamilyName || "";
+  const pmono = !!pf.post?.isFixedPitch;
+  const ppan = pf["OS/2"]?.panose;
+  const pkind = pmono ? "monospace" : (ppan && ppan[0] === 2 ? (ppan[1] >= 2 && ppan[1] <= 10 ? "serif" : "sans serif") : "typeface");
+  const paxes = Object.entries(pf.variationAxes || {});
+  const pfeat = [...new Set(pf.availableFeatures || [])].length;
+  const escP = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const htmlP = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${escP(pfam)} poster</title>
+<style>
+@font-face { font-family: "SPEC"; src: url("file://${encodeURI(abs)}"); }
+@page { size: Letter portrait; margin: 0; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { background: #26262a; font-family: "Helvetica Neue", Arial, sans-serif; color: #101013; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.spec { font-family: "SPEC", serif; }
+.page { background: #fcfcfa; width: 8.5in; height: 11in; padding: 0.6in; margin: 0 auto; display: flex; flex-direction: column; overflow: hidden; }
+@media screen { .page { margin: 12px auto; box-shadow: 0 1px 4px rgba(0,0,0,.4); } }
+.bar { display: flex; justify-content: space-between; font-size: 8.5pt; letter-spacing: .16em; text-transform: uppercase; padding: 8px 0; border-bottom: 2px solid #101013; }
+.big { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+.name { font-size: 150pt; line-height: .9; letter-spacing: -.03em; word-break: break-word; margin: 0; }
+.pangram { font-size: 32pt; line-height: 1.15; margin-top: 26px; max-width: 6.4in; }
+.meta { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 2px solid #101013; padding-top: 12px; }
+.meta .k { font-size: 7.5pt; letter-spacing: .14em; text-transform: uppercase; color: #8a8a84; margin-bottom: 4px; }
+.meta .v { font-size: 12pt; }
+</style></head><body>
+<section class="page">
+  <div class="bar"><span>Waterfall / Type poster</span><span>${escP(pstyle) || escP(pkind)}</span></div>
+  <div class="big">
+    <h1 class="name spec">${escP(pfam)}</h1>
+    <div class="pangram spec">Sphinx of black quartz, judge my vow.</div>
+  </div>
+  <div class="meta">
+    <div><div class="k">Classification</div><div class="v">${escP(pkind)}</div></div>
+    <div><div class="k">Glyphs</div><div class="v">${pf.numGlyphs.toLocaleString()}</div></div>
+    <div><div class="k">Variable axes</div><div class="v">${paxes.length || "—"}</div></div>
+    <div><div class="k">Features</div><div class="v">${pfeat}</div></div>
+  </div>
+</section>
+</body></html>`;
+  mkdirSync(OUT, { recursive: true });
+  const slugP = pfam.toLowerCase().replace(/[^\w]+/g, "-") + "-poster";
+  const outP = join(OUT, `${slugP}.html`);
+  writeFileSync(outP, htmlP);
+  console.log(`✓ ${outP}`);
+  if (!flag("--no-pdf")) {
+    const { chromium } = await import("playwright");
+    const b = await chromium.launch();
+    try {
+      const p = await b.newPage();
+      await p.goto(`file://${outP}`, { waitUntil: "networkidle" });
+      await p.pdf({ path: join(OUT, `${slugP}.pdf`), format: "Letter", printBackground: true, preferCSSPageSize: true });
+      console.log(`✓ ${join(OUT, `${slugP}.pdf`)}`);
+    } finally { await b.close(); }
+  }
+  process.exit(0);
+}
+
 let font = fontkit.openSync(abs);
 if (font.fonts) font = font.fonts[0]; // .ttc collections: take the first face
 
